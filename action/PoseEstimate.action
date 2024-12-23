@@ -1,0 +1,8 @@
+# Request
+string obj_name
+---
+# Result
+mbot_perception_msgs/RecognizedObject3D obj_pose
+---
+# Feedback
+string current_process
