@@ -11,11 +11,13 @@
     "banana": "obj_000010",
     "pitcher_base": "obj_000011",
     "bleach_cleanser": "obj_000012",
+    "bowl": "obj_000013",
+    "mug": "obj_000014",
     "power_drill": "obj_000015",
     "wood_block": "obj_000016",
     "scissors": "obj_000017",
     "large_marker": "obj_000018",
-    "medium_clamp": "obj_000019",
-    "large_clamp": "obj_000020",
+    "large_clamp": "obj_000019",
+    "extra_large_clamp": "obj_000020",
     "foam_brick": "obj_000021"
 }
