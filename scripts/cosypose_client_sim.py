@@ -25,7 +25,7 @@ class CosyposeServer():
         # Set datadir
         rospack = rospkg.RosPack()
         self.pkg_dir = rospack.get_path('happypose_ros1')
-        self.assets_dir = self.pkg_dir + "/assets/"
+        self.assets_dir = self.pkg_dir + "/assets/two_objs_ycb/"
 
         # Load parameters
         self.server_url_base = rospy.get_param("~server_url", "http://localhost:5000")
@@ -77,8 +77,10 @@ class CosyposeServer():
             return False
 
     def execute_callback(self, goal_handle):
-        obj_name = goal_handle.obj_info.obj_name
-        chosen_frame = goal_handle.obj_info.frame
+        # TODO: Apply obj name and label mapping according to config file. The server does not need to know obj name, only label
+        obj_name = goal_handle.obj_info.objs[0].obj_name
+        chosen_frame = goal_handle.obj_info.objs[0].frame
+        # rospy.logerr(goal_handle.obj_info)
 
         rospy.loginfo("Starting cosypose estimation…")
 
@@ -97,6 +99,10 @@ class CosyposeServer():
         pose_estimate = self.get_pose_from_server()
         rospy.logwarn(pose_estimate)
         
+        # TODO: Apply tf conversion according to requested frame
+
+        # TODO: Convert results to result msg (RecognizedObject3DList)
+
         if pose_estimate:
             # Send the result
             result = happypose_ros1.msg.PoseEstimateResult()

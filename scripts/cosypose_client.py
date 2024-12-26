@@ -88,7 +88,7 @@ class CosyposeServer():
             self._action_server.set_aborted()
 
     
-    def simulateDetectionResults(self):
+    def processDetectionResults(self):
         """Sets up synchronized subscribers for one-time use per goal."""
 
 
