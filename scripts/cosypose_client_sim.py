@@ -28,10 +28,13 @@ class CosyposeServer():
         self.assets_dir = self.pkg_dir + "/assets/"
 
         # Load parameters
-        self.server_url = rospy.get_param("~server_url", "http://localhost:5000/get_pose")
+        self.server_url_base = rospy.get_param("~server_url", "http://localhost:5000")
+        self.load_model_url = f"{self.server_url_base}/load_model"
+        self.get_pose_url = f"{self.server_url_base}/get_pose"
         self.dataset = rospy.get_param('~dataset', 'ycbv')
         self.image = rospy.get_param("~image_name", "image_rgb.png")
         self.bbox_data = rospy.get_param("~json_path", "object_data.json")
+        self.cam_data = rospy.get_param("~json_path", "camera_data.json")
         self.meshes_size = rospy.get_param("~objs_meshes_size", "mm")
         self.meshes_path = rospy.get_param("~meshes_path", os.getenv("HAPPYPOSE_DATA_DIR") + "/assets/")
         rospy.logwarn(self.meshes_path)
@@ -41,10 +44,38 @@ class CosyposeServer():
         self.rgb_img = None
         self.camera_params = None
 
+        # Load the model at initialization
+        if not self.load_model():
+            rospy.logerr("Failed to load the model on the Happypose server. Exiting.")
+            rospy.signal_shutdown("Failed to load model")
+
         # Start the server
         self._action_server.start()
         rospy.loginfo("Starting Cosypose Action Server")
-    
+
+    def load_model(self):
+        """Send a request to load the model on the Happypose server."""
+        try:
+            # Prepare JSON data for loading the model
+            load_model_data = {
+                "dataset": self.dataset,
+                "objs_meshes_size": self.meshes_size,
+                "meshes_path": self.meshes_path
+            }
+
+            # Send POST request to load the model
+            response = requests.post(self.load_model_url, json=load_model_data)
+
+            if response.status_code == 200:
+                rospy.loginfo("Model loaded successfully on the Happypose server.")
+                return True
+            else:
+                rospy.logerr(f"Error loading model: {response.status_code} - {response.text}")
+                return False
+        except requests.exceptions.RequestException as e:
+            rospy.logerr(f"Request to load the model failed: {e}")
+            return False
+
     def execute_callback(self, goal_handle):
         obj_name = goal_handle.obj_info.obj_name
         chosen_frame = goal_handle.obj_info.frame
@@ -75,28 +106,20 @@ class CosyposeServer():
             rospy.logerr("Failed to get pose estimate from Happypose server.")
             self._action_server.set_aborted()
 
+
     def simulateDetectionResults(self):
-        """Simulate detection results by reading the necessary data"""
+        """Simulate detection results by reading the necessary data."""
         self.detectionResults = readJsonFile(self.assets_dir, self.bbox_data)        
         self.rgb_img = readImg(self.assets_dir + self.image)
-        rospy.loginfo(self.detectionResults)
+        self.camera_params = readJsonFile(self.assets_dir, self.cam_data)
 
-        # Read camera parameters from file (simulating)
-        camera_data_path = Path(self.assets_dir + "/camera_data.json")
-        with camera_data_path.open("r") as file:
-            self.camera_params = json.load(file)
-
-        rospy.loginfo(self.camera_params)
 
     def get_pose_from_server(self):
         """Fetch pose estimate from external Happypose server over HTTP (with JSON and image)."""
         try:
-            # Prepare the JSON data with extra parameters
+            # Prepare the JSON data for inference
             json_data = {
-                "dataset": self.dataset,
                 "bbox_info": self.detectionResults,  # Ensure this is in the right format
-                "objs_meshes_size": self.meshes_size,
-                "meshes_path": self.meshes_path,
                 "camera_params": self.camera_params  # Make sure this is correctly loaded
             }
 
@@ -108,12 +131,12 @@ class CosyposeServer():
 
             # Prepare the files to send in the request
             files = {
-                'rgb_img': ('image.jpg', img_data, 'image/jpeg'),  # Make sure the key is "rgb_img"
+                'rgb_img': ('image.jpg', img_data, 'image/jpeg'),  # Image file
                 'data.json': ('data.json', json.dumps(json_data), 'application/json')  # JSON file
             }
 
-            # Send HTTP POST request with both the image and JSON data
-            response = requests.post(self.server_url, files=files)
+            # Send HTTP POST request for inference
+            response = requests.post(self.get_pose_url, files=files)
 
             if response.status_code == 200:
                 # Parse response JSON to extract pose estimate
