@@ -1,1 +1,0 @@
-ObjectRequestInfo[] objs

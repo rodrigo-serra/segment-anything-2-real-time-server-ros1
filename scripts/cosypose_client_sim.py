@@ -14,7 +14,7 @@ from pathlib import Path
 import happypose_ros1.msg
 from cv_bridge import CvBridge
 import io
-from my_robot_common.modules.common import readImg, readJsonFile
+from my_robot_common.modules.common import readImg, readJsonFile, readYamlFile
 import rospkg
 
 class CosyposeServer():
@@ -26,23 +26,35 @@ class CosyposeServer():
         rospack = rospkg.RosPack()
         self.pkg_dir = rospack.get_path('happypose_ros1')
         self.assets_dir = self.pkg_dir + "/assets/two_objs_ycb/"
+        self.config_dir = self.pkg_dir + "/config/"
 
         # Load parameters
         self.server_url_base = rospy.get_param("~server_url", "http://localhost:5000")
         self.load_model_url = f"{self.server_url_base}/load_model"
         self.get_pose_url = f"{self.server_url_base}/get_pose"
         self.dataset = rospy.get_param('~dataset', 'ycbv')
+        self.obj_label_map_file_name = rospy.get_param('~obj_label_map_file', 'label_map.json')
         self.image = rospy.get_param("~image_name", "image_rgb.png")
         self.bbox_data = rospy.get_param("~json_path", "object_data.json")
         self.cam_data = rospy.get_param("~json_path", "camera_data.json")
         self.meshes_size = rospy.get_param("~objs_meshes_size", "mm")
         self.meshes_path = rospy.get_param("~meshes_path", os.getenv("HAPPYPOSE_DATA_DIR") + "/assets/")
-        rospy.logwarn(self.meshes_path)
+
+        # Validate meshs path
+        if not os.path.exists(self.meshes_path):
+            rospy.logerr(f"Meshes path {self.meshes_path} does not exist.")
+            rospy.signal_shutdown("Invalid meshes path")
 
         # Node variables
+        # Server response time limit
+        self.server_timeout_res = 10
+
         self.detectionResults = []
         self.rgb_img = None
         self.camera_params = None
+
+        self.bbox_info = []
+        self.obj_names = []
 
         # Load the model at initialization
         if not self.load_model():
@@ -64,7 +76,7 @@ class CosyposeServer():
             }
 
             # Send POST request to load the model
-            response = requests.post(self.load_model_url, json=load_model_data)
+            response = requests.post(self.load_model_url, json=load_model_data, timeout=self.server_timeout_res)
 
             if response.status_code == 200:
                 rospy.loginfo("Model loaded successfully on the Happypose server.")
@@ -78,10 +90,26 @@ class CosyposeServer():
 
     def execute_callback(self, goal_handle):
         # TODO: Apply obj name and label mapping according to config file. The server does not need to know obj name, only label
-        obj_name = goal_handle.obj_info.objs[0].obj_name
-        chosen_frame = goal_handle.obj_info.objs[0].frame
-        # rospy.logerr(goal_handle.obj_info)
-
+        # Load and validate object label map
+        obj_label_map = readYamlFile(self.config_dir, self.obj_label_map_file_name)
+        if not obj_label_map:
+            rospy.logerr("Object label map is empty or not found.")
+            self._action_server.set_aborted(text="Object label map is empty or not found.")
+            return
+        
+        objs = goal_handle.objs
+        for i in range(len(objs)): 
+            obj_name = objs[i].obj_name
+            if obj_name not in obj_label_map:
+                rospy.logerr(f"Object '{obj_name}' not found in the label map.")
+                self._action_server.set_aborted(text=f"Object '{obj_name}' not found in the label map.")
+                return
+            
+            obj_label = obj_label_map[obj_name]
+            dic = {"label": obj_label}
+            self.bbox_info.append(dic)
+            self.obj_names.append(obj_name)
+        
         rospy.loginfo("Starting cosypose estimation…")
 
         # Read cam image and detectron results
@@ -108,6 +136,7 @@ class CosyposeServer():
             result = happypose_ros1.msg.PoseEstimateResult()
             # result.obj_pose = pose_estimate
             self._action_server.set_succeeded(result)
+            self.resetVars()
         else:
             rospy.logerr("Failed to get pose estimate from Happypose server.")
             self._action_server.set_aborted()
@@ -142,7 +171,7 @@ class CosyposeServer():
             }
 
             # Send HTTP POST request for inference
-            response = requests.post(self.get_pose_url, files=files)
+            response = requests.post(self.get_pose_url, files=files, timeout=self.server_timeout_res)
 
             if response.status_code == 200:
                 # Parse response JSON to extract pose estimate
@@ -154,6 +183,12 @@ class CosyposeServer():
         except requests.exceptions.RequestException as e:
             rospy.logerr(f"Request to Happypose server failed: {e}")
             return None
+    
+
+    def resetVars(self):
+        rospy.loginfo("Reseting variables...")
+        self.bbox_info = []
+        self.obj_names = []
 
 
 def main(args=None):
