@@ -24,6 +24,8 @@ class CosyposeServer():
         self.pkg_dir = rospack.get_path('happypose_ros1')
         self.config_dir = self.pkg_dir + "/config/"
 
+        self.bridge = CvBridge()
+
         # Load parameters
         self.server_url_base = rospy.get_param("~server_url", "http://localhost:5000")
         self.load_model_url = f"{self.server_url_base}/load_model"
@@ -180,7 +182,7 @@ class CosyposeServer():
         # Send pose estimate request to Happypose server
         feedback_msg.current_process = "Sending data to Happypose server"
         self._action_server.publish_feedback(feedback_msg)
-
+        
         pose_estimate = self.get_pose_from_server()
         rospy.logwarn(pose_estimate)
 
@@ -205,7 +207,7 @@ class CosyposeServer():
     
     def processDetectionResults(self):
         """Process detectron results and converting to request msg format"""
-        detected_objs = self.detectionResults.detections
+        detected_objs = self.detectionResults.objects.objects
         for i in range(len(detected_objs)):
             # Getting bounding box limits
             class_name = detected_objs[i].class_name
@@ -244,18 +246,23 @@ class CosyposeServer():
             rospy.logerr(f"Failed to initialize detection results synchronization: {e}")
             self._action_server.set_aborted()
 
-    
     def detectronSynchronizedCallback(self, detectronMsg, imgMsg):
         """Callback for synchronized detection and camera messages."""
         rospy.loginfo("Synchronized messages received.")
         self.detectionResults = detectronMsg
-        self.rgb_img = imgMsg
+        try:
+            # Convert ROS Image message to OpenCV format
+            self.rgb_img = self.bridge.imgmsg_to_cv2(imgMsg, desired_encoding='bgr8')
+        except Exception as e:
+            rospy.logerr(f"Failed to convert image: {e}")
+            self.rgb_img = None
+
         self.readDetectronMsgs = True
 
         # Unsubscribe after receiving messages
         self.img_sub.unregister()
         self.detector_sub.unregister()
-        self.ts = None  
+        self.ts = None
 
     
     def get_pose_from_server(self):

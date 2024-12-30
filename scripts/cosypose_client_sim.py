@@ -89,7 +89,7 @@ class CosyposeServer():
             return False
 
     def execute_callback(self, goal_handle):
-        # TODO: Apply obj name and label mapping according to config file. The server does not need to know obj name, only label
+        # Apply obj name and label mapping according to config file. The server does not need to know obj name, only label
         # Load and validate object label map
         obj_label_map = readYamlFile(self.config_dir, self.obj_label_map_file_name)
         if not obj_label_map:
