@@ -1,0 +1,18 @@
+<launch>
+  <!-- Argument for conditional recording of detectron topics -->
+  <arg name="is_record_detectron" default="true"/>
+  <arg name="bags_directory" default="/home/socrob/Documents/bags/obj_loc_test"/>
+
+  <!-- Conditionally launch the rosbag recorder if is_record_detectron is true -->
+  <node pkg="rosbag" type="record" name="rosbag_record_detectron"
+        args="record -o $(arg bags_directory)
+              /azure/rgb/camera_info
+              /azure/rgb/image_raw
+              /detectron2_ros_specific/result
+              /rosout
+              /rosout_agg
+              /tf
+              /tf_static
+              /clock"
+        if="$(arg is_record_detectron)" />
+</launch>
