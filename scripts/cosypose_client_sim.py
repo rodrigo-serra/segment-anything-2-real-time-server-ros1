@@ -154,8 +154,8 @@ class CosyposeServer():
         try:
             # Prepare the JSON data for inference
             json_data = {
-                "bbox_info": self.detectionResults,  # Ensure this is in the right format
-                "camera_params": self.camera_params  # Make sure this is correctly loaded
+                "bbox_info": self.detectionResults,
+                "camera_params": self.camera_params
             }
 
             rospy.loginfo("Sending JSON Data: %s", json.dumps(json_data))

@@ -2,7 +2,7 @@
 import rospy, message_filters
 from sensor_msgs.msg import Image, CameraInfo
 from detectron2_ros.msg import RecognizedObjectWithMaskArrayStamped
-from mbot_perception_msgs.msg import RecognizedObject3D
+from mbot_perception_msgs.msg import RecognizedObject3D, RecognizedObject3DList
 import actionlib
 import os, json, requests, io
 import cv2
@@ -54,6 +54,7 @@ class CosyposeServer():
         self._sync_wait_time = 5.0
         self.detectionResults = None
         self.rgb_img = None
+        self.rgb_img_header = None
         self.readDetectronMsgs = False
         
         self.camera_params = None
@@ -175,7 +176,7 @@ class CosyposeServer():
 
         rospy.loginfo("Synchronized messages received successfully.")
         
-        # TODO: Process detection results
+        # Process detection results
         self.processDetectionResults()
 
         #########################################
@@ -190,14 +191,15 @@ class CosyposeServer():
         # TODO: Apply tf conversion according to requested frame
         
         #########################################
-        # TODO: Convert results to result msg (RecognizedObject3DList)
+        # Convert results to result msg (RecognizedObject3DList)
+        res_msg = self.convertPoseRes2Msg(pose_estimate=pose_estimate)
 
         #########################################
         # Return result
         if pose_estimate:
             # Send the result
             result = happypose_ros1.msg.PoseEstimateResult()
-            # result.obj_pose = pose_estimate
+            result.obj_pose = res_msg
             self._action_server.set_succeeded(result)
             self.resetVars()
         else:
@@ -205,6 +207,67 @@ class CosyposeServer():
             self._action_server.set_aborted()
 
     
+    def convertPoseRes2Msg(self, pose_estimate):
+        # If pose_estimate is a string, try to deserialize it
+        if isinstance(pose_estimate, str):
+            try:
+                pose_estimate = json.loads(pose_estimate)
+            except json.JSONDecodeError as e:
+                rospy.logerr(f"Failed to deserialize pose estimate: {e}")
+                raise ValueError("Pose estimate could not be deserialized.")
+
+        # Ensure pose_estimate is a list of dictionaries after deserialization
+        if not isinstance(pose_estimate, list):
+            rospy.logerr(f"Expected a list, but got: {type(pose_estimate)}")
+            raise ValueError("Pose estimate should be a list of dictionaries.")
+    
+        # Initialize the RecognizedObject3DList message
+        recognized_objects_list = RecognizedObject3DList()
+        recognized_objects_list.header.stamp = rospy.Time.now()
+        recognized_objects_list.header.frame_id = self.rgb_img_header.frame_id
+        recognized_objects_list.image_header = self.rgb_img_header
+
+        # Process each object in the pose_estimate
+        for obj in pose_estimate:
+            recognized_object = RecognizedObject3D()
+
+            # Extract label from pose estimate
+            label = obj.get("label", "unknown")
+            
+            # Map label to object name using bbox_info and obj_names
+            obj_name = "unknown"
+            for idx, info in enumerate(self.bbox_info):
+                if info.get("label") == label:
+                    obj_name = self.obj_names[idx]
+                    break
+
+            # Assign the mapped object name to class_name
+            recognized_object.class_name = obj_name
+
+            # Extract pose
+            pose_data = obj.get("pose", [])
+            if len(pose_data) == 2:
+                # Extract orientation (quaternion)
+                orientation = pose_data[0]
+                recognized_object.pose.orientation.x = orientation[0]
+                recognized_object.pose.orientation.y = orientation[1]
+                recognized_object.pose.orientation.z = orientation[2]
+                recognized_object.pose.orientation.w = orientation[3]
+
+                # Extract position
+                position = pose_data[1]
+                recognized_object.pose.position.x = position[0]
+                recognized_object.pose.position.y = position[1]
+                recognized_object.pose.position.z = position[2]
+            else:
+                rospy.logwarn("Pose data missing or malformed for object: {}".format(obj.get("label", "unknown")))
+
+            # Add the object to the list
+            recognized_objects_list.objects.append(recognized_object)
+    
+        return recognized_objects_list
+
+
     def processDetectionResults(self):
         """Process detectron results and converting to request msg format"""
         detected_objs = self.detectionResults.objects.objects
@@ -251,6 +314,8 @@ class CosyposeServer():
         rospy.loginfo("Synchronized messages received.")
         self.detectionResults = detectronMsg
         try:
+             # Save the header from the camera image
+            self.rgb_img_header = imgMsg.header
             # Convert ROS Image message to OpenCV format
             self.rgb_img = self.bridge.imgmsg_to_cv2(imgMsg, desired_encoding='bgr8')
         except Exception as e:
@@ -305,6 +370,7 @@ class CosyposeServer():
         rospy.loginfo("Reseting variables...")
         self.bbox_info = []
         self.obj_names = []
+        self.rgb_img_header = None
 
 
     
