@@ -1,23 +1,86 @@
 {
-    "master_chef_can": "obj_000001",
-    "cracker_box": "obj_000002",
-    "sugar_box": "obj_000003",
-    "tomato_soup_can": "obj_000004",
-    "mustard_bottle": "obj_000005",
-    "tuna_fish_can": "obj_000006",
-    "pudding_box": "obj_000007",
-    "gelatin_box": "obj_000008",
-    "potted_meat_can": "obj_000009",
-    "banana": "obj_000010",
-    "pitcher_base": "obj_000011",
-    "bleach_cleanser": "obj_000012",
-    "bowl": "obj_000013",
-    "mug": "obj_000014",
-    "power_drill": "obj_000015",
-    "wood_block": "obj_000016",
-    "scissors": "obj_000017",
-    "large_marker": "obj_000018",
-    "large_clamp": "obj_000019",
-    "extra_large_clamp": "obj_000020",
-    "foam_brick": "obj_000021"
+    "master_chef_can": {
+        "label": "obj_000001",
+        "possible_names": []
+    },
+    "cracker_box": {
+        "label": "obj_000002",
+        "possible_names": ["cheezit"]
+    },
+    "sugar_box": {
+        "label": "obj_000003",
+        "possible_names": []
+    },
+    "tomato_soup_can": {
+        "label": "obj_000004",
+        "possible_names": []
+    },
+    "mustard_bottle": {
+        "label": "obj_000005",
+        "possible_names": []
+    },
+    "tuna_fish_can": {
+        "label": "obj_000006",
+        "possible_names": []
+    },
+    "pudding_box": {
+        "label": "obj_000007",
+        "possible_names": []
+    },
+    "gelatin_box": {
+        "label": "obj_000008",
+        "possible_names": []
+    },
+    "potted_meat_can": {
+        "label": "obj_000009",
+        "possible_names": []
+    },
+    "banana": {
+        "label": "obj_000010",
+        "possible_names": []
+    },
+    "pitcher_base": {
+        "label": "obj_000011",
+        "possible_names": []
+    },
+    "bleach_cleanser": {
+        "label": "obj_000012",
+        "possible_names": []
+    },
+    "bowl": {
+        "label": "obj_000013",
+        "possible_names": []
+    },
+    "mug": {
+        "label": "obj_000014",
+        "possible_names": []
+    },
+    "power_drill": {
+        "label": "obj_000015",
+        "possible_names": []
+    },
+    "wood_block": {
+        "label": "obj_000016",
+        "possible_names": []
+    },
+    "scissors": {
+        "label": "obj_000017",
+        "possible_names": []
+    },
+    "large_marker": {
+        "label": "obj_000018",
+        "possible_names": []
+    },
+    "large_clamp": {
+        "label": "obj_000019",
+        "possible_names": []
+    },
+    "extra_large_clamp": {
+        "label": "obj_000020",
+        "possible_names": []
+    },
+    "foam_brick": {
+        "label": "obj_000021",
+        "possible_names": []
+    }
 }

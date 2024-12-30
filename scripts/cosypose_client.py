@@ -125,9 +125,7 @@ class CosyposeServer():
             rospy.logerr(f"Request to load the model failed: {e}")
             return False
     
-    
-    # Callback function to run after acknowledging a goal from the client
-    def execute_callback(self, goal_handle):
+    def processGoalRequest(self, objs):
         # Apply obj name and label mapping according to config file. The server does not need to know obj name, only label
         # Load and validate object label map
         obj_label_map = readYamlFile(self.config_dir, self.obj_label_map_file_name)
@@ -135,22 +133,49 @@ class CosyposeServer():
             rospy.logerr("Object label map is empty or not found.")
             self._action_server.set_aborted(text="Object label map is empty or not found.")
             return
-        
-        objs = goal_handle.objs
-        for i in range(len(objs)): 
-            obj_name = objs[i].obj_name
+
+        for obj in objs:
+            obj_name = obj.obj_name 
+            official_obj_name = obj_name
+
+            # Check if the obj_name is directly in the label map
             if obj_name not in obj_label_map:
-                rospy.logerr(f"Object '{obj_name}' not found in the label map.")
-                self._action_server.set_aborted(text=f"Object '{obj_name}' not found in the label map.")
+                # If not found, check if it's one of the possible names in the label map
+                matched_name = None
+                for key, value in obj_label_map.items():
+                    if obj_name in value['possible_names']:
+                        matched_name = key
+                        break
+                
+                if matched_name is None:
+                    rospy.logerr(f"Object '{obj_name}' not found in the label map or its possible names.")
+                    self._action_server.set_aborted(text=f"Object '{obj_name}' not found in the label map or its possible names.")
+                    return
+                
+                # Use the matched obj_name from the label map
+                official_obj_name = matched_name
+            else:
+                rospy.logerr(f"Object '{obj_name}' will not match object detector names. Please set correct name!")
+                if self._action_server.is_active():  # Check if the action server is still active
+                    self._action_server.set_aborted(text=f"Object '{obj_name}' will not match object detector names. Please set correct name!")
                 return
             
-            obj_label = obj_label_map[obj_name]
+            # Now that we have the correct obj_name, proceed with the label mapping
+            obj_label = obj_label_map[official_obj_name]['label']
+            
             dic = {"label": obj_label}
             # Note: Both lists below will be "linked" by their index, 
             # e.g. self.bbox_info[0] and self.obj_names[0] will have info about the same obj
             self.bbox_info.append(dic)
             self.obj_names.append(obj_name)
+            rospy.logwarn(self.obj_names)
 
+
+    # Callback function to run after acknowledging a goal from the client
+    def execute_callback(self, goal_handle):
+        #########################################
+        # Applying label/dataset mapping according to request
+        self.processGoalRequest(goal_handle.objs)
         rospy.loginfo("Starting cosypose estimation…")
         
         #########################################
@@ -270,28 +295,41 @@ class CosyposeServer():
 
     def processDetectionResults(self):
         """Process detectron results and converting to request msg format"""
+        atLeast1Obj = False  # Flag to track if any object was detected
         detected_objs = self.detectionResults.objects.objects
-        for i in range(len(detected_objs)):
-            # Getting bounding box limits
-            class_name = detected_objs[i].class_name
+        
+        for detected_obj in detected_objs:
+            class_name = detected_obj.class_name
+            
             if class_name in self.obj_names:
+                # Set flag when any object from obj_names is detected
+                atLeast1Obj = True
+
                 # Find the index of the class name in obj_names
                 class_index = self.obj_names.index(class_name)
 
-                x_offset = detected_objs[i].bounding_box.x_offset
-                width = detected_objs[i].bounding_box.width
-                y_offset = detected_objs[i].bounding_box.y_offset
-                height = detected_objs[i].bounding_box.height
-        
+                # Get bounding box info
+                x_offset = detected_obj.bounding_box.x_offset
+                width = detected_obj.bounding_box.width
+                y_offset = detected_obj.bounding_box.y_offset
+                height = detected_obj.bounding_box.height
+            
                 top_left = (int(x_offset), int(y_offset))
                 bottom_right = (int(x_offset + width), int(y_offset + height))
 
+                # Store bounding box data
                 self.bbox_info[class_index]["bbox_modal"] = [
                     top_left[0],
                     top_left[1],
                     bottom_right[0],
                     bottom_right[1]
                 ]
+
+        # If no objects from obj_names were detected, abort the action
+        if not atLeast1Obj:
+            rospy.logerr("Detected objects missing.")
+            self._action_server.set_aborted(text="Objects not detected")
+
 
 
     def getDetectionResults(self):
