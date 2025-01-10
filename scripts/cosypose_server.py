@@ -56,6 +56,7 @@ class CosyposeServer():
         self.rgb_img = None
         self.rgb_img_header = None
         self.readDetectronMsgs = False
+        self.proccessObject = False
         
         self.camera_params = None
         self.bbox_info = []
@@ -180,11 +181,10 @@ class CosyposeServer():
         
         #########################################
         # Read cam image and detectron results
-        feedback_msg = happypose_ros1.msg.PoseEstimateFeedback()
-        feedback_msg.current_process = "Reading cam image and detectron results"
-        self._action_server.publish_feedback(feedback_msg)
+        self.sendFeedback(msg="Reading cam image and detectron results")
 
         self.getDetectionResults()
+
         # Wait for synchronized messages
         wait_time = rospy.Duration(self._sync_wait_time)
         start_time = rospy.Time.now()
@@ -193,21 +193,23 @@ class CosyposeServer():
             rospy.sleep(0.1)
 
         if not self.readDetectronMsgs:
-            rospy.logerr("Failed to receive synchronized messages within timeout.")
-            feedback_msg.current_process = "Failed to receive synchronized messages within timeout"
-            self._action_server.publish_feedback(feedback_msg)
-            self._action_server.set_aborted()
+            self.abort_action(error_msg="Failed to receive synchronized messages within timeout.")
+            self.resetVars()
             return
 
         rospy.loginfo("Synchronized messages received successfully.")
+        self.sendFeedback(msg="Synchronized messages received successfully.")
         
         # Process detection results
         self.processDetectionResults()
-
+        if not self.proccessObject:
+            self.abort_action(error_msg="Detected objects missing.")
+            self.resetVars()
+            return
+        
         #########################################
         # Send pose estimate request to Happypose server
-        feedback_msg.current_process = "Sending data to Happypose server"
-        self._action_server.publish_feedback(feedback_msg)
+        self.sendFeedback(msg="Sending data to Happypose server")
         
         pose_estimate = self.get_pose_from_server()
         rospy.logwarn(pose_estimate)
@@ -226,13 +228,27 @@ class CosyposeServer():
             result = happypose_ros1.msg.PoseEstimateResult()
             result.obj_pose = res_msg
             self._action_server.set_succeeded(result)
-            self.resetVars()
         else:
-            rospy.logerr("Failed to get pose estimate from Happypose server.")
-            self._action_server.set_aborted()
+            self.abort_action(error_msg="Failed to get pose estimate from Happypose server.")
 
+        self.resetVars()
+
+
+    def abort_action(self, error_msg: str):
+        """Utility function to abort the action and log the error."""
+        rospy.logerr(error_msg)
+        if self._action_server.is_active():
+            self._action_server.set_aborted(text=error_msg)
+        return
+
+    def sendFeedback(self, msg: str):
+        """Utility function to send feedback"""
+        feedback_msg = happypose_ros1.msg.PoseEstimateFeedback()
+        feedback_msg.current_process = msg
+        self._action_server.publish_feedback(feedback_msg)
     
-    def convertPoseRes2Msg(self, pose_estimate):
+
+    def convertPoseRes2Msg(self, pose_estimate: str):
         # If pose_estimate is a string, try to deserialize it
         if isinstance(pose_estimate, str):
             try:
@@ -295,7 +311,6 @@ class CosyposeServer():
 
     def processDetectionResults(self):
         """Process detectron results and converting to request msg format"""
-        atLeast1Obj = False  # Flag to track if any object was detected
         detected_objs = self.detectionResults.objects.objects
         
         for detected_obj in detected_objs:
@@ -303,7 +318,7 @@ class CosyposeServer():
             
             if class_name in self.obj_names:
                 # Set flag when any object from obj_names is detected
-                atLeast1Obj = True
+                self.proccessObject = True
 
                 # Find the index of the class name in obj_names
                 class_index = self.obj_names.index(class_name)
@@ -324,12 +339,6 @@ class CosyposeServer():
                     bottom_right[0],
                     bottom_right[1]
                 ]
-
-        # If no objects from obj_names were detected, abort the action
-        if not atLeast1Obj:
-            rospy.logerr("Detected objects missing.")
-            self._action_server.set_aborted(text="Objects not detected")
-
 
 
     def getDetectionResults(self):
@@ -409,6 +418,7 @@ class CosyposeServer():
         self.bbox_info = []
         self.obj_names = []
         self.rgb_img_header = None
+        self.proccessObject = False
 
 
     
