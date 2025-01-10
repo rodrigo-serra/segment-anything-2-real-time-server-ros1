@@ -13,11 +13,11 @@ from cv_bridge import CvBridge
 from my_robot_common.modules.common import readYamlFile
 import rospkg
 
-class CosyposeServer():
+class HappyposeServer():
     # Create Feedback and Result messages
     def __init__(self):
         # Create the server
-        action_server_name = rospy.get_param("~action_server_name", "cosypose_ros")
+        action_server_name = rospy.get_param("~action_server_name", "happypose_ros")
         self._action_server = actionlib.SimpleActionServer(action_server_name, happypose_ros1.msg.PoseEstimateAction, self.execute_callback, False)
 
         # Set datadir
@@ -73,7 +73,7 @@ class CosyposeServer():
 
         # Start the server
         self._action_server.start()
-        rospy.loginfo("Starting Cosypose Action Server")
+        rospy.loginfo("Starting happypose Action Server")
 
 
     def get_camera_params(self):
@@ -178,7 +178,7 @@ class CosyposeServer():
         #########################################
         # Applying label/dataset mapping according to request
         self.processGoalRequest(goal_handle.objs)
-        rospy.loginfo("Starting cosypose estimation…")
+        rospy.loginfo("Starting happypose estimation…")
         
         #########################################
         # Read cam image and detectron results
@@ -425,8 +425,8 @@ class CosyposeServer():
     
 def main(args=None):
     # Init ROS1 and give the node a name
-    rospy.init_node("cosypose_server")
-    cosypose_server = CosyposeServer()
+    rospy.init_node("happypose_server")
+    happypose_server = HappyposeServer()
     rospy.spin()
 
 

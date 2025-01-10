@@ -17,10 +17,10 @@ import io
 from my_robot_common.modules.common import readImg, readJsonFile, readYamlFile
 import rospkg
 
-class CosyposeServer():
+class HappyposeServer():
     def __init__(self):
         # Create the server
-        self._action_server = actionlib.SimpleActionServer('cosypose_ros', happypose_ros1.msg.PoseEstimateAction, self.execute_callback, False)
+        self._action_server = actionlib.SimpleActionServer('happypose_ros', happypose_ros1.msg.PoseEstimateAction, self.execute_callback, False)
 
         # Set datadir
         rospack = rospkg.RosPack()
@@ -63,7 +63,7 @@ class CosyposeServer():
 
         # Start the server
         self._action_server.start()
-        rospy.loginfo("Starting Cosypose Action Server")
+        rospy.loginfo("Starting happypose Action Server")
 
     def load_model(self):
         """Send a request to load the model on the Happypose server."""
@@ -110,7 +110,7 @@ class CosyposeServer():
             self.bbox_info.append(dic)
             self.obj_names.append(obj_name)
         
-        rospy.loginfo("Starting cosypose estimation…")
+        rospy.loginfo("Starting happypose estimation…")
 
         # Read cam image and detectron results
         feedback_msg = happypose_ros1.msg.PoseEstimateFeedback()
@@ -193,8 +193,8 @@ class CosyposeServer():
 
 def main(args=None):
     # Init ROS1 and give the node a name
-    rospy.init_node("cosypose_server")
-    cosypose_server = CosyposeServer()
+    rospy.init_node("happypose_server")
+    happypose_server = HappyposeServer()
     rospy.spin()
 
 
