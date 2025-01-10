@@ -17,7 +17,8 @@ class CosyposeServer():
     # Create Feedback and Result messages
     def __init__(self):
         # Create the server
-        self._action_server = actionlib.SimpleActionServer('cosypose_ros', happypose_ros1.msg.PoseEstimateAction, self.execute_callback, False)
+        action_server_name = rospy.get_param("~action_server_name", "cosypose_ros")
+        self._action_server = actionlib.SimpleActionServer(action_server_name, happypose_ros1.msg.PoseEstimateAction, self.execute_callback, False)
 
         # Set datadir
         rospack = rospkg.RosPack()
