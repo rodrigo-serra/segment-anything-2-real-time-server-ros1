@@ -1,3 +1,3 @@
-string obj_name
+string[] obj_names
 
 string frame

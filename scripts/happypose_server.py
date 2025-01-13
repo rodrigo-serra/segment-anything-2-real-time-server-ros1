@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import rospy, message_filters
 from sensor_msgs.msg import Image, CameraInfo
+from geometry_msgs.msg import PoseStamped
 from detectron2_ros.msg import RecognizedObjectWithMaskArrayStamped
 from mbot_perception_msgs.msg import RecognizedObject3D, RecognizedObject3DList
 import actionlib
@@ -10,7 +11,7 @@ import numpy as np
 from pathlib import Path
 import happypose_ros1.msg
 from cv_bridge import CvBridge
-from my_robot_common.modules.common import readYamlFile
+from my_robot_common.modules.common import readYamlFile, transformPoseFrame, init_tf
 import rospkg
 
 class HappyposeServer():
@@ -26,6 +27,9 @@ class HappyposeServer():
         self.config_dir = self.pkg_dir + "/config/"
 
         self.bridge = CvBridge()
+
+        # Initiallize TFs
+        init_tf()
 
         # Load parameters
         self.server_url_base = rospy.get_param("~server_url", "http://localhost:5000")
@@ -62,6 +66,7 @@ class HappyposeServer():
         self.camera_params = None
         self.bbox_info = []
         self.obj_names = []
+        self.req_frame = None
 
         # Fetch and store camera parameters
         self.get_camera_params()
@@ -127,7 +132,8 @@ class HappyposeServer():
             rospy.logerr(f"Request to load the model failed: {e}")
             return False
     
-    def processGoalRequest(self, objs):
+    def processGoalRequest(self, info):
+        """Process the list of requested objects, match them to the label map, etc."""
         # Apply obj name and label mapping according to config file. The server does not need to know obj name, only label
         # Load and validate object label map
         obj_label_map = readYamlFile(self.config_dir, self.obj_label_map_file_name)
@@ -136,8 +142,11 @@ class HappyposeServer():
             self._action_server.set_aborted(text="Object label map is empty or not found.")
             return
 
-        for obj in objs:
-            obj_name = obj.obj_name 
+        # Get frame from msg
+        self.req_frame = info.frame
+
+        for obj in info.obj_names:
+            obj_name = obj
             official_obj_name = obj_name
 
             # Check if the obj_name is directly in the label map
@@ -175,15 +184,12 @@ class HappyposeServer():
 
     # Callback function to run after acknowledging a goal from the client
     def execute_callback(self, goal_handle):
-        #########################################
-        # Applying label/dataset mapping according to request
-        self.processGoalRequest(goal_handle.objs)
+        # 0. Applying label/dataset mapping according to request
+        self.processGoalRequest(goal_handle.info)
         rospy.loginfo("Starting happypose estimation…")
         
-        #########################################
-        # Read cam image and detectron results
+        # 1. Get camera/detectron results
         self.sendFeedback(msg="Reading cam image and detectron results")
-
         self.getDetectionResults()
 
         # Wait for synchronized messages
@@ -201,31 +207,21 @@ class HappyposeServer():
         rospy.loginfo("Synchronized messages received successfully.")
         self.sendFeedback(msg="Synchronized messages received successfully.")
         
-        # Process detection results
+        # 2. Process detection results
         self.processDetectionResults()
         if not self.proccessObject:
             self.abort_action(error_msg="Detected objects missing.")
             self.resetVars()
             return
         
-        #########################################
-        # Send pose estimate request to Happypose server
+        # 3. Query the external serverr
         self.sendFeedback(msg="Sending data to Happypose server")
-        
         pose_estimate = self.get_pose_from_server()
         rospy.logwarn(pose_estimate)
 
-        #########################################
-        # TODO: Apply tf conversion according to requested frame
-        
-        #########################################
-        # Convert results to result msg (RecognizedObject3DList)
-        res_msg = self.convertPoseRes2Msg(pose_estimate=pose_estimate)
-
-        #########################################
-        # Return result
+        # 4. Covert & Return result
         if pose_estimate:
-            # Send the result
+            res_msg = self.convertPoseRes2Msg(pose_estimate=pose_estimate)
             result = happypose_ros1.msg.PoseEstimateResult()
             result.obj_pose = res_msg
             self._action_server.set_succeeded(result)
@@ -250,7 +246,6 @@ class HappyposeServer():
     
 
     def convertPoseRes2Msg(self, pose_estimate: str):
-        # If pose_estimate is a string, try to deserialize it
         if isinstance(pose_estimate, str):
             try:
                 pose_estimate = json.loads(pose_estimate)
@@ -258,55 +253,86 @@ class HappyposeServer():
                 rospy.logerr(f"Failed to deserialize pose estimate: {e}")
                 raise ValueError("Pose estimate could not be deserialized.")
 
-        # Ensure pose_estimate is a list of dictionaries after deserialization
         if not isinstance(pose_estimate, list):
             rospy.logerr(f"Expected a list, but got: {type(pose_estimate)}")
             raise ValueError("Pose estimate should be a list of dictionaries.")
-    
-        # Initialize the RecognizedObject3DList message
+
         recognized_objects_list = RecognizedObject3DList()
         recognized_objects_list.header.stamp = rospy.Time.now()
         recognized_objects_list.header.frame_id = self.rgb_img_header.frame_id
         recognized_objects_list.image_header = self.rgb_img_header
 
-        # Process each object in the pose_estimate
+        rospy.logwarn("Original pose frame: " + self.rgb_img_header.frame_id)
+
         for obj in pose_estimate:
             recognized_object = RecognizedObject3D()
-
-            # Extract label from pose estimate
             label = obj.get("label", "unknown")
-            
-            # Map label to object name using bbox_info and obj_names
+
+            # Match with our local arrays
             obj_name = "unknown"
             for idx, info in enumerate(self.bbox_info):
                 if info.get("label") == label:
                     obj_name = self.obj_names[idx]
+                    idx_for_obj = idx
                     break
-
-            # Assign the mapped object name to class_name
+            
             recognized_object.class_name = obj_name
 
-            # Extract pose
             pose_data = obj.get("pose", [])
-            if len(pose_data) == 2:
-                # Extract orientation (quaternion)
-                orientation = pose_data[0]
-                recognized_object.pose.orientation.x = orientation[0]
-                recognized_object.pose.orientation.y = orientation[1]
-                recognized_object.pose.orientation.z = orientation[2]
-                recognized_object.pose.orientation.w = orientation[3]
+            # Example: pose_data = [ [qx,qy,qz,qw], [x,y,z] ]
+            if len(pose_data) != 2:
+                rospy.logwarn(f"Pose data missing or malformed for object: {label}")
+                recognized_objects_list.objects.append(recognized_object)
+                continue
 
-                # Extract position
-                position = pose_data[1]
-                recognized_object.pose.position.x = position[0]
-                recognized_object.pose.position.y = position[1]
-                recognized_object.pose.position.z = position[2]
-            else:
-                rospy.logwarn("Pose data missing or malformed for object: {}".format(obj.get("label", "unknown")))
+            # If the user specified a 'frame', attempt transform
+            if obj_name != "unknown":
+                if self.req_frame and self.req_frame != self.rgb_img_header.frame_id:
+                    # Create a PoseStamped from the current 'pose_data'
+                    # We do a partial "Pose" -> "PoseStamped"
+                    pose_st = PoseStamped()
+                    pose_st.header = recognized_objects_list.header
+                    pose_st.pose.orientation.x = pose_data[0][0]
+                    pose_st.pose.orientation.y = pose_data[0][1]
+                    pose_st.pose.orientation.z = pose_data[0][2]
+                    pose_st.pose.orientation.w = pose_data[0][3]
+                    pose_st.pose.position.x = pose_data[1][0]
+                    pose_st.pose.position.y = pose_data[1][1]
+                    pose_st.pose.position.z = pose_data[1][2]
 
-            # Add the object to the list
+                    # Attempt transform
+                    try:
+                        new_pose_st = transformPoseFrame(pose_st, self.req_frame)
+                        if new_pose_st is not None:
+                            # Overwrite recognized_objects_list header
+                            recognized_objects_list.header = new_pose_st.header
+                            # Overwrite pose_data with the newly transformed
+                            # Convert geometry_msgs/Pose back to [orientation, position]
+                            o = new_pose_st.pose.orientation
+                            p = new_pose_st.pose.position
+                            pose_data = [
+                                [o.x, o.y, o.z, o.w],
+                                [p.x, p.y, p.z]
+                            ]
+                        else:
+                            rospy.logerr("Could not transform to requested frame: " + self.req_frame)
+                    except Exception as e:
+                        rospy.logerr(f"Transform to frame '{self.req_frame}' failed: {e}")
+
+            # Now fill recognized_object with the final pose_data
+            orientation = pose_data[0]
+            recognized_object.pose.orientation.x = orientation[0]
+            recognized_object.pose.orientation.y = orientation[1]
+            recognized_object.pose.orientation.z = orientation[2]
+            recognized_object.pose.orientation.w = orientation[3]
+
+            position = pose_data[1]
+            recognized_object.pose.position.x = position[0]
+            recognized_object.pose.position.y = position[1]
+            recognized_object.pose.position.z = position[2]
+
             recognized_objects_list.objects.append(recognized_object)
-    
+
         return recognized_objects_list
 
 
@@ -418,6 +444,7 @@ class HappyposeServer():
         rospy.loginfo("Reseting variables...")
         self.bbox_info = []
         self.obj_names = []
+        self.req_frame = None
         self.rgb_img_header = None
         self.proccessObject = False
 

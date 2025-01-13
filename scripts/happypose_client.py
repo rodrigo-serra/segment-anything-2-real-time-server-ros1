@@ -69,14 +69,15 @@ def main():
     client.wait_for_server()
     rospy.loginfo("[happypose_client] Connected to action server '%s'.", action_name)
 
-    # Create a goal to send to the action server
+     # Create a goal
     goal = PoseEstimateGoal()
-    request_object = ObjectRequestInfo()
-    request_object.obj_name = "cheezit"
-    request_object.frame = ""
-    goal.objs.append(request_object)
+    request_info = ObjectRequestInfo()
+    request_info.obj_names = ["cheezit"]
+    request_info.frame = ""
+    goal.info = request_info
 
-    rospy.loginfo("[happypose_client] Sending goal with object request: %s", request_object.obj_name)
+    rospy.loginfo("[happypose_client] Sending goal with obj_names=%s, frame=%s",
+                  request_info.obj_names, request_info.frame)
 
     # Send the goal to the server with callbacks
     client.send_goal(

@@ -1,5 +1,5 @@
 # Request
-happypose_ros1/ObjectRequestInfo[] objs
+happypose_ros1/ObjectRequestInfo info
 ---
 # Result
 mbot_perception_msgs/RecognizedObject3DList obj_pose
