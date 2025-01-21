@@ -17,13 +17,13 @@
   <arg name="action_server_name" default="happypose_ros"/>
   <arg name="server_url" default="http://localhost:5000"/>
   <arg name="dataset" default="ycbv"/>
-  <arg name="obj_label_map_file" default="label_map.json"/>
   <arg name="cam_input_topic" default="/azure/rgb/image_raw"/>
   <arg name="cam_info_topic" default="/azure/rgb/camera_info"/>
   <arg name="detectron_result_topic" default="/detectron2_ros_specific/result"/>
-  <arg name="objs_meshes_size" default="mm"/>
   <!-- Example of using an env var for path, or you can set your own default -->
-  <arg name="meshes_path" default="$(env HAPPYPOSE_DATA_DIR)/assets"/>
+  <arg name="meshes_path" default="$(env CAD_DATA_DIR)"/>
+  <arg name="obj_label_map_file" default="label_map.json"/>
+  <arg name="objs_meshes_size" default="mm"/>
 
   <!-- Node definition -->
   <node pkg="happypose_ros1" type="happypose_server.py" name="happypose_server" output="screen">

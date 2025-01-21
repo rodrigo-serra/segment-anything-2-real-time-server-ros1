@@ -7,12 +7,9 @@ from mbot_perception_msgs.msg import RecognizedObject3D, RecognizedObject3DList
 import actionlib
 import os, json, requests, io
 import cv2
-import numpy as np
-from pathlib import Path
 import happypose_ros1.msg
 from cv_bridge import CvBridge
 from my_robot_common.modules.common import readYamlFile, transformPoseFrame, init_tf
-import rospkg
 
 class HappyposeServer():
     # Create Feedback and Result messages
@@ -20,11 +17,6 @@ class HappyposeServer():
         # Create the server
         action_server_name = rospy.get_param("~action_server_name", "happypose_ros")
         self._action_server = actionlib.SimpleActionServer(action_server_name, happypose_ros1.msg.PoseEstimateAction, self.execute_callback, False)
-
-        # Set datadir
-        rospack = rospkg.RosPack()
-        self.pkg_dir = rospack.get_path('happypose_ros1')
-        self.config_dir = self.pkg_dir + "/config/"
 
         self.bridge = CvBridge()
 
@@ -41,7 +33,8 @@ class HappyposeServer():
         self.cam_info_topic = rospy.get_param('~cam_info', '/azure/rgb/camera_info')
         self.detections_topic = rospy.get_param('~detectron_result', '/detectron2_ros_specific/result')
         self.meshes_size = rospy.get_param("~objs_meshes_size", "mm")
-        self.meshes_path = rospy.get_param("~meshes_path", os.getenv("HAPPYPOSE_DATA_DIR") + "/assets/")
+        self.meshes_path = rospy.get_param("~meshes_path", os.getenv("CAD_DATA_DIR"))
+        self.config_dir = self.meshes_path + "/"
 
         # Validate meshs path
         if not os.path.exists(self.meshes_path):
