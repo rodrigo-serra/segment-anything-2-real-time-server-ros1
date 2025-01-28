@@ -1,0 +1,45 @@
+  <!--
+      This launch file starts your Python script (happypose_server.py) as a node,
+      passing in parameters through ROS parameters.
+      
+      1) "action_server_name"   => Name of the action server.
+      2) "server_url"           => The base URL for your Flask/happypose server.
+      3) "dataset"              => The name of the dataset (e.g., "ycbv").
+      4) "obj_label_map_file"   => The JSON or YAML file with label mappings.
+      5) "cam_input"            => The camera image topic (RGB).
+      6) "cam_info"             => The camera info topic for calibration intrinsics.
+      7) "detectron_result"     => The detection results topic from your detectron node.
+      8) "objs_meshes_size"     => The mesh units for the objects (e.g. "mm", "cm", "m").
+      9) "meshes_path"          => Path to the objects’ 3D models.
+  -->
+<launch>
+  <!-- Launch arguments with defaults -->
+  <arg name="action_server_name" default="happypose_ros"/>
+  <arg name="server_url" default="http://localhost:5000"/>
+  <arg name="model" default="megapose-1.0-RGB"/>
+  <arg name="cam_input_topic" default="/azure/rgb/image_raw"/>
+  <arg name="cam_depth_input" default="/azure/rgb/image_raw"/>
+  <arg name="cam_info_topic" default="/azure/rgb/camera_info"/>
+  <arg name="detectron_result_topic" default="/detectron2_ros_specific/result"/>
+  <!-- Example of using an env var for path, or you can set your own default -->
+  <arg name="meshes_path" default="$(env CAD_DATA_DIR)"/>
+  <arg name="obj_label_map_file" default="label_map.json"/>
+  <arg name="objs_meshes_size" default="mm"/>
+
+  <!-- Node definition -->
+  <node pkg="happypose_ros1" type="happypose_server_rgbd.py" name="happypose_server" output="screen">
+
+    <!-- Pass each argument as a private parameter to the node -->
+    <param name="action_server_name" value="$(arg action_server_name)"/>
+    <param name="server_url" value="$(arg server_url)"/>
+    <param name="model" value="$(arg model)"/>
+    <param name="obj_label_map_file" value="$(arg obj_label_map_file)"/>
+    <param name="cam_input" value="$(arg cam_input_topic)"/>
+    <param name="cam_depth_input" value="$(arg cam_depth_input)"/>
+    <param name="cam_info" value="$(arg cam_info_topic)"/>
+    <param name="detectron_result" value="$(arg detectron_result_topic)"/>
+    <param name="objs_meshes_size" value="$(arg objs_meshes_size)"/>
+    <param name="meshes_path" value="$(arg meshes_path)"/>
+
+  </node>
+</launch>
