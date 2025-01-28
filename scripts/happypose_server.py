@@ -27,6 +27,8 @@ class HappyposeServer():
         self.server_url_base = rospy.get_param("~server_url", "http://localhost:5000")
         self.load_model_url = f"{self.server_url_base}/load_model"
         self.get_pose_url = f"{self.server_url_base}/get_pose"
+        self.use_megapose = rospy.get_param('~use_megapose', True)
+        self.megapose_model = rospy.get_param('~model', 'megapose-1.0-RGB')
         self.dataset = rospy.get_param('~dataset', 'ycbv')
         self.obj_label_map_file_name = rospy.get_param('~obj_label_map_file', 'label_map.json')
         self.cam_input_topic = rospy.get_param('~cam_input', '/azure/rgb/image_raw')
@@ -100,17 +102,24 @@ class HappyposeServer():
         except rospy.ROSException as e:
             rospy.logerr(f"Failed to fetch camera parameters: {e}")
             rospy.signal_shutdown("Failed to fetch camera parameters")
-    
 
+    
     def load_model(self):
         """Send a request to load the model on the Happypose server."""
         try:
             # Prepare JSON data for loading the model
-            load_model_data = {
-                "dataset": self.dataset,
-                "objs_meshes_size": self.meshes_size,
-                "meshes_path": self.meshes_path
-            }
+            if self.use_megapose:
+                load_model_data = {
+                    "model": self.megapose_model,
+                    "objs_meshes_size": self.meshes_size,
+                    "meshes_path": self.meshes_path
+                }
+            else:
+                load_model_data = {
+                    "dataset": self.dataset,
+                    "objs_meshes_size": self.meshes_size,
+                    "meshes_path": self.meshes_path
+                }
 
             # Send POST request to load the model
             response = requests.post(self.load_model_url, json=load_model_data, timeout=self.server_timeout_res)

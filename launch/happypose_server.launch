@@ -16,6 +16,10 @@
   <!-- Launch arguments with defaults -->
   <arg name="action_server_name" default="happypose_ros"/>
   <arg name="server_url" default="http://localhost:5000"/>
+  <arg name="use_megapose" default="true"/>
+  <!-- Param only relevant for MegaPose -->
+  <arg name="model" default="megapose-1.0-RGB"/>
+  <!-- Param only relevant for CosyPose -->
   <arg name="dataset" default="ycbv"/>
   <arg name="cam_input_topic" default="/azure/rgb/image_raw"/>
   <arg name="cam_info_topic" default="/azure/rgb/camera_info"/>
@@ -31,6 +35,8 @@
     <!-- Pass each argument as a private parameter to the node -->
     <param name="action_server_name" value="$(arg action_server_name)"/>
     <param name="server_url" value="$(arg server_url)"/>
+    <param name="use_megapose" value="$(arg use_megapose)"/>
+    <param name="model" value="$(arg model)"/>
     <param name="dataset" value="$(arg dataset)"/>
     <param name="obj_label_map_file" value="$(arg obj_label_map_file)"/>
     <param name="cam_input" value="$(arg cam_input_topic)"/>
