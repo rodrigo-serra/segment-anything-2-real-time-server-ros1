@@ -30,7 +30,7 @@ class HappyposeServer():
         self.megapose_model = rospy.get_param('~model', 'megapose-1.0-RGBD')
         self.obj_label_map_file_name = rospy.get_param('~obj_label_map_file', 'label_map.json')
         self.cam_input_topic = rospy.get_param('~cam_input', '/azure/rgb/image_raw')
-        self.cam_depth_input_topic = rospy.get_param('~cam_depth_input', '/azure/depth/image_raw')
+        self.cam_depth_input_topic = rospy.get_param('~cam_depth_input', '/azure/depth_to_rgb/image_raw')
         self.cam_info_topic = rospy.get_param('~cam_info', '/azure/rgb/camera_info')
         self.detections_topic = rospy.get_param('~detectron_result', '/detectron2_ros_specific/result')
         self.meshes_size = rospy.get_param("~objs_meshes_size", "mm")
@@ -41,6 +41,11 @@ class HappyposeServer():
         if not os.path.exists(self.meshes_path):
             rospy.logerr(f"Meshes path {self.meshes_path} does not exist.")
             rospy.signal_shutdown("Invalid meshes path")
+
+        # Server response time limit
+        self.server_timeout_res = 10
+        # Camera info timeout
+        self.read_cam_info_timeout = 5
 
         # Node variables
         self._queue_size = 10

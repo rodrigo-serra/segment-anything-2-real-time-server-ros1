@@ -16,9 +16,10 @@
   <!-- Launch arguments with defaults -->
   <arg name="action_server_name" default="happypose_ros"/>
   <arg name="server_url" default="http://localhost:5000"/>
-  <arg name="model" default="megapose-1.0-RGB"/>
+  <arg name="model" default="megapose-1.0-RGBD"/>
+  <!-- <arg name="model" default="megapose-1.0-RGB-multi-hypothesis-icp"/> -->
   <arg name="cam_input_topic" default="/azure/rgb/image_raw"/>
-  <arg name="cam_depth_input" default="/azure/rgb/image_raw"/>
+  <arg name="cam_depth_input" default="/azure/depth_to_rgb/image_raw"/>
   <arg name="cam_info_topic" default="/azure/rgb/camera_info"/>
   <arg name="detectron_result_topic" default="/detectron2_ros_specific/result"/>
   <!-- Example of using an env var for path, or you can set your own default -->
