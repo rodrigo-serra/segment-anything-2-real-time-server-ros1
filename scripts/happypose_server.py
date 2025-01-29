@@ -152,7 +152,7 @@ class HappyposeServer():
             official_obj_name = obj_name
 
             # Check if the obj_name is directly in the label map
-            if obj_name not in obj_label_map:
+            if obj_name in obj_label_map:
                 # If not found, check if it's one of the possible names in the label map
                 matched_name = None
                 for key, value in obj_label_map.items():
