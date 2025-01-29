@@ -136,7 +136,7 @@ class HappyposeServer():
             official_obj_name = obj_name
 
             # Check if the obj_name is directly in the label map
-            if obj_name in obj_label_map:
+            if obj_name not in obj_label_map:
                 # If not found, check if it's one of the possible names in the label map
                 matched_name = None
                 for key, value in obj_label_map.items():
@@ -151,11 +151,6 @@ class HappyposeServer():
                 
                 # Use the matched obj_name from the label map
                 official_obj_name = matched_name
-            else:
-                rospy.logerr(f"Object '{obj_name}' will not match object detector names. Please set correct name!")
-                if self._action_server.is_active():  # Check if the action server is still active
-                    self._action_server.set_aborted(text=f"Object '{obj_name}' will not match object detector names. Please set correct name!")
-                return
             
             # Now that we have the correct obj_name, proceed with the label mapping
             obj_label = obj_label_map[official_obj_name]['label']
