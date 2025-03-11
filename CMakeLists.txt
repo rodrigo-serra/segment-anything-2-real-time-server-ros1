@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(happypose_ros1)
+project(sam2_ros1)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -56,10 +56,10 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-add_message_files(
-   FILES
-   ObjectRequestInfo.msg
-)
+# add_message_files(
+#   FILES
+#   ObjectRequestInfo.msg
+#)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -69,10 +69,10 @@ add_message_files(
 # )
 
 ## Generate actions in the 'action' folder
- add_action_files(
-   FILES
-   PoseEstimate.action
-)
+# add_action_files(
+#   FILES
+#   PoseEstimate.action
+#)
 
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
@@ -115,7 +115,7 @@ generate_messages(
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES happypose_ros1
+#  LIBRARIES sam2_ros1
 #  CATKIN_DEPENDS cv_bridge geometry_msgs message_filters message_generation rospy sensor_msgs std_msgs
 #  DEPENDS system_lib
 )
@@ -133,7 +133,7 @@ include_directories(
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/happypose_ros1.cpp
+#   src/${PROJECT_NAME}/sam2_ros1.cpp
 # )
 
 ## Add cmake target dependencies of the library
@@ -144,7 +144,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/happypose_ros1_node.cpp)
+# add_executable(${PROJECT_NAME}_node src/sam2_ros1_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -208,7 +208,7 @@ include_directories(
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_happypose_ros1.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_sam2_ros1.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()
