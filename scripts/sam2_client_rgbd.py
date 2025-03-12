@@ -9,7 +9,7 @@ from cv_bridge import CvBridge
 import message_filters
 import tf2_ros
 import geometry_msgs.msg
-
+from centroid_computation import compute_3d_position_from_mask_and_depth
 
 class SAM2(object):
     def __init__(self):
@@ -19,7 +19,7 @@ class SAM2(object):
         # Parameters
         self.cam_input_topic = rospy.get_param('~cam_input', '/azure/rgb/image_raw')
         self.cam_depth_input_topic = rospy.get_param('~cam_depth_input', '/azure/depth_to_rgb/image_raw')
-        self.cam_info_topic = rospy.get_param('~cam_info', '/azure/rgb/camera_info')
+        self.cam_info_topic = rospy.get_param('~cam_info', '/azure/depth_to_rgb/camera_info')
         self.detections_topic = rospy.get_param('~detectron_result', '/detectron2_ros/result')
         self.FLASK_SERVER_URL = 'http://localhost:5000/process_rgb'
         self.FLASK_SERVER_INIT_URL = 'http://localhost:5000/initialize_model'
@@ -40,7 +40,7 @@ class SAM2(object):
         self.rgb_img_header = None
         self.depth_img = None
 
-        self.show_live_result = False
+        self.show_live_result = True
         self.show_centroid = True
 
         # Fetch and store camera parameters
@@ -211,39 +211,6 @@ class SAM2(object):
             rospy.logerr(f"Failed to convert images: {e}")
             self.rgb_img = None
             self.depth_img = None
-
-
-    def compute_centroid(self, mask):
-        """Compute the centroid of the mask (person)."""
-        # Get the coordinates where the mask is non-zero
-        person_mask = mask[:, :, 0] > 0
-
-        # Get the coordinates of the person's pixels
-        coords = np.array(np.nonzero(person_mask)).T
-
-        # Calculate the centroid (mean of the coordinates)
-        if coords.size > 0:
-            centroid = np.mean(coords, axis=0)
-            # Return (x, y) in (columns, rows)
-            return centroid[1], centroid[0]
-        return None, None
-    
-
-    def compute_position(self, x, y, depth_value):
-        """Compute 3D position from pixel (x, y) and depth value."""
-        # Camera intrinsic parameters
-        K = np.array(self.camera_params["K"])
-        f_x = K[0, 0]
-        f_y = K[1, 1]
-        c_x = K[0, 2]
-        c_y = K[1, 2]
-
-        # Convert 2D image point (x, y) to 3D world coordinates
-        Z = depth_value
-        X = (x - c_x) * Z / f_x
-        Y = (y - c_y) * Z / f_y
-
-        return X, Y, Z
     
 
     def publish_person_transform(self, X, Y, Z):
@@ -288,29 +255,23 @@ class SAM2(object):
                         mask = np.frombuffer(response.content, np.uint8)
                         mask = cv2.imdecode(mask, cv2.IMREAD_COLOR)
 
-                        # GENERATE TF FOR PERSON FOLLOWING
                         # Compute centroid of the person in the mask
-                        x, y = self.compute_centroid(mask)
+                        cx, cy, X, Y, Z = compute_3d_position_from_mask_and_depth(depth_image=depth_image, person_mask=mask, camera_intrinsics=self.camera_params)
                         
                         if self.show_live_result:
-                            if x and y and self.show_centroid:
-                                # Draw the centroid on the RGB image
-                                # Draw a circle at the centroid (x, y)
+                            if cx and cy and self.show_centroid:
+                                # Draw a circle at the centroid (x, y) on the RGB img
                                 centroid_color = (0, 255, 0)
                                 centroid_radius = 10
-                                cv2.circle(rgb_image, (int(x), int(y)), centroid_radius, centroid_color, -1)
+                                cv2.circle(rgb_image, (int(cx), int(cy)), centroid_radius, centroid_color, -1)
                             
                             rgb_image = cv2.addWeighted(rgb_image, 1, mask, 0.5, 0)
                             cv2.imshow("Frame", rgb_image)
                             cv2.waitKey(1)
 
 
-                        if x is not None and y is not None:
-                            # Get the depth value at the centroid
-                            depth_value = depth_image[int(y), int(x)]
-                            # Compute the 3D position of the centroid
-                            X, Y, Z = self.compute_position(x, y, depth_value)
-                            rospy.loginfo(f"Person's 3D Centroid Position: X={X}, Y={Y}, Z={Z}")
+                        if cx is not None and cy is not None:
+                            # rospy.loginfo(f"Person's 3D Centroid Position: X={X}, Y={Y}, Z={Z}")
                             # Broadcast the transform for the person's position
                             self.publish_person_transform(X, Y, Z)
 
