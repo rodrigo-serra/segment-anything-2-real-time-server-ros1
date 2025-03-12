@@ -17,18 +17,22 @@ class EKF:
         self.F = np.eye(6)
         
         # Observation matrix (H) - we're observing positions, so it's just a position measurement
-        self.H = np.eye(6)
+        self.H = np.array([[1,0,0,0,0,0],
+                           [0,1,0,0,0,0],
+                           [0,0,1,0,0,0]])
+        # self.H = np.eye(6)
         
         self.dt = dt
 
-        self.F[0, 3] = self.dt
-        self.F[1, 4] = self.dt
-        self.F[2, 5] = self.dt
+        # self.F[0, 3] = self.dt
+        # self.F[1, 4] = self.dt
+        # self.F[2, 5] = self.dt
     
 
     def predict(self):
         # Predict the next state assuming constant velocity model
-        self.state[:3] = self.state[:3] + self.state[3:]*self.dt #np.dot(self.F, self.state)
+        # self.state[:3] = self.state[:3] + self.state[3:]*self.dt #np.dot(self.F, self.state)
+        self.state = np.dot(self.F, self.state)
         self.covariance = np.dot(np.dot(self.F, self.covariance), self.F.T) + self.Q
     
 
@@ -44,8 +48,8 @@ class EKF:
 
         # Predicted state based on current state estimate
         prediction = np.dot(self.H, self.state)
-        new_vel = (measurement-self.last_measurement[:3])/self.dt
-        measurement = np.concatenate([measurement, new_vel])
+        # new_vel = (measurement-self.last_measurement[:3])/self.dt
+        # measurement = np.concatenate([measurement, new_vel])
 
         # Residual (difference between measurement and predicted state)
         innovation = measurement - prediction
@@ -61,7 +65,7 @@ class EKF:
         comp_1 = np.eye(len(self.state)) - np.dot(K, self.H)
         self.covariance = np.dot(np.dot(comp_1, self.covariance), comp_1.T) + np.dot(np.dot(K, dynamic_R), K.T)
 
-        self.last_measurement = measurement
+        # self.last_measurement = measurement
 
 
     def get_state(self):
