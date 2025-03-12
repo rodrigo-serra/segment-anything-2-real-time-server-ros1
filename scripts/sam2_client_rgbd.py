@@ -10,6 +10,7 @@ import message_filters
 import tf2_ros
 import geometry_msgs.msg
 from centroid_computation import compute_3d_position_from_mask_and_depth
+from ekf import *
 
 class SAM2(object):
     def __init__(self):
@@ -43,6 +44,30 @@ class SAM2(object):
         self.show_live_result = True
         self.show_centroid = True
 
+        # EFK Parameters
+        # Define process noise covariance (Q)
+        process_noise_cov=[[1e-1, 0, 0, 0, 0, 0],
+                        [0, 1e-1, 0, 0, 0, 0],
+                        [0, 0, 1e-1, 0, 0, 0],
+                        [0, 0, 0, 1e-1, 0, 0],
+                        [0, 0, 0, 0, 1e-1, 0],
+                        [0, 0, 0, 0, 0, 1e-1]]
+
+        # Define measurement noise covariance (R) for 3D measurements
+        self.measurement_noise_cov = np.eye(3)/10
+        # self.measurement_noise_cov = np.eye(6)/10
+
+        # Initial covariance matrix
+        initial_covariance=[[1e-1, 0, 0, 0, 0, 0],
+                        [0, 1e-1, 0, 0, 0, 0],
+                        [0, 0, 1e-1, 0, 0, 0],
+                        [0, 0, 0, 1e-1, 0, 0],
+                        [0, 0, 0, 0, 1e-1, 0],
+                        [0, 0, 0, 0, 0, 1e-1]]
+
+        # Time step
+        dt = 1.0
+
         # Fetch and store camera parameters
         self.get_camera_params()
 
@@ -66,6 +91,31 @@ class SAM2(object):
         except Exception as e:
             rospy.logerr(f"Error processing detection results: {e}")
             rospy.signal_shutdown("Failed to process detection results!")
+
+
+        # Compute centroid of the person in the mask for EKF Initialization
+        # Compute the 3D position from the mask and depth image
+        _, _, x, y, z = compute_3d_position_from_mask_and_depth(
+            depth_image=self.depth_img, 
+            person_mask=self.initial_mask, 
+            camera_intrinsics=self.camera_params
+        )
+        # Log the computed 3D position
+        if x is not None and y is not None and z is not None:
+            rospy.logwarn(f"3D Position - X: {x}, Y: {y}, Z: {z}")
+        else:
+            rospy.logwarn("Failed to compute valid 3D position.")
+            rospy.signal_shutdown("Failed to compute valid 3D position.!")
+
+
+        # Initialize EFK
+        initial_state = [x, y, z, 0, 0, 0]
+        # Initialize the Extended Kalman Filter
+        self.ekf = EKF(process_noise_cov=process_noise_cov,
+                initial_state=initial_state,
+                initial_covariance=initial_covariance,
+                dt=dt)
+
 
         try:
             self.initialize_model_with_mask()
@@ -96,16 +146,18 @@ class SAM2(object):
             rospy.signal_shutdown("Failed to fetch camera parameters")
 
 
-    def detectronSynchronizedCallback(self, detectronMsg, imgMsg):
+    def detectronSynchronizedCallback(self, detectronMsg, imgMsg, depthMsg):
         """Callback for synchronized detection and camera messages."""
         rospy.loginfo("Synchronized messages received.")
         self.detectionResults = detectronMsg
         try:
             # Convert ROS Image message to OpenCV format
             self.rgb_img = self.bridge.imgmsg_to_cv2(imgMsg, desired_encoding='bgr8')
+            self.depth_img= self.bridge.imgmsg_to_cv2(depthMsg, desired_encoding='32FC1')
         except Exception as e:
             rospy.logerr(f"Failed to convert image: {e}")
             self.rgb_img = None
+            self.depth_img = None
 
         self.readDetectronMsgs = True
 
@@ -121,8 +173,9 @@ class SAM2(object):
             self.readDetectronMsgs = False
             self.img_sub = message_filters.Subscriber(self.cam_input_topic, Image)
             self.detector_sub = message_filters.Subscriber(self.detections_topic, RecognizedObjectWithMaskArrayStamped)
+            self.depth_sub = message_filters.Subscriber(self.cam_depth_input_topic, Image)
             self.ts = message_filters.ApproximateTimeSynchronizer(
-                [self.detector_sub, self.img_sub], queue_size=self._queue_size, slop=self._slop
+                [self.detector_sub, self.img_sub, self.depth_sub], queue_size=self._queue_size, slop=self._slop
             )
             self.ts.registerCallback(self.detectronSynchronizedCallback)
         except Exception as e:
@@ -181,6 +234,7 @@ class SAM2(object):
         if response.status_code == 200:
             self.initialized = True
             self.rgb_img = None
+            self.depth_img = None
             self.initial_mask = None
             rospy.loginfo("SAM2 server initialized successfully.")
         else:
@@ -271,6 +325,10 @@ class SAM2(object):
 
 
                         if cx is not None and cy is not None:
+                            # Run the EFK
+                            self.ekf.predict()
+                            self.ekf.update([X, Y, Z], dynamic_R=self.measurement_noise_cov)
+                            [X, Y, Z] = self.ekf.get_state()
                             # rospy.loginfo(f"Person's 3D Centroid Position: X={X}, Y={Y}, Z={Z}")
                             # Broadcast the transform for the person's position
                             self.publish_person_transform(X, Y, Z)

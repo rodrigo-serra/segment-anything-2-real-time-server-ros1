@@ -70,7 +70,7 @@ class EKF:
 
     def get_state(self):
         # Return only position (X, Y, Z)
-        return self.state
+        return self.state[:3]
 
 
 
